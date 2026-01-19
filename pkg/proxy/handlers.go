@@ -3,6 +3,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -41,6 +42,11 @@ func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
 
 		clusterName := p.GetClusterName(req.URL.Path)
 		ClusterConfig := p.clusterManager.GetCluster(clusterName)
+		if ClusterConfig == nil {
+			p.handleError(rw, req, fmt.Errorf("cluster %q not found", clusterName))
+			return
+		}
+
 		req.URL.Path = strings.TrimPrefix(req.URL.Path, "/"+clusterName)
 
 		reqInfo, err := p.requestInfo.NewRequestInfo(req)
