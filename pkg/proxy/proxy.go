@@ -85,7 +85,11 @@ func (caFromFile CAFromFile) CurrentCABundleContent() []byte {
 	if caFromFile.CAFile == "" {
 		return nil
 	}
-	res, _ := os.ReadFile(caFromFile.CAFile)
+	res, err := os.ReadFile(caFromFile.CAFile)
+	if err != nil {
+		klog.Errorf("unable to read CA file %s: %s", caFromFile.CAFile, err)
+		return nil
+	}
 	return res
 }
 
@@ -104,6 +108,9 @@ func New(
 		}
 		caContentProvider = caFromFile
 		caBundle = caFromFile.CurrentCABundleContent()
+		if caBundle == nil {
+			return nil, fmt.Errorf("unable to load CA bundle from file: %s", oidcOptions.CAFile)
+		}
 	}
 
 	// setup static JWT Auhenticator
