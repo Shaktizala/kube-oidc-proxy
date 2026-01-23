@@ -5,10 +5,10 @@ import (
 	ctx "context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -82,7 +82,14 @@ type CAFromFile struct {
 }
 
 func (caFromFile CAFromFile) CurrentCABundleContent() []byte {
-	res, _ := ioutil.ReadFile(caFromFile.CAFile)
+	if caFromFile.CAFile == "" {
+		return nil
+	}
+	res, err := os.ReadFile(caFromFile.CAFile)
+	if err != nil {
+		klog.Errorf("unable to read CA file %s: %s", caFromFile.CAFile, err)
+		return nil
+	}
 	return res
 }
 
@@ -93,9 +100,17 @@ func New(
 	config *Config,
 	clusterManager ClusterManager) (*Proxy, error) {
 
-	// load the CA from the file listed in the options
-	caFromFile := CAFromFile{
-		CAFile: oidcOptions.CAFile,
+	var caContentProvider oidc.CAContentProvider
+	var caBundle []byte
+	if oidcOptions.CAFile != "" {
+		caFromFile := CAFromFile{
+			CAFile: oidcOptions.CAFile,
+		}
+		caContentProvider = caFromFile
+		caBundle = caFromFile.CurrentCABundleContent()
+		if caBundle == nil {
+			return nil, fmt.Errorf("unable to load CA bundle from file: %s", oidcOptions.CAFile)
+		}
 	}
 
 	// setup static JWT Auhenticator
@@ -103,7 +118,7 @@ func New(
 		Issuer: apiserver.Issuer{
 			URL:                  oidcOptions.IssuerURL,
 			Audiences:            []string{oidcOptions.ClientID},
-			CertificateAuthority: string(caFromFile.CurrentCABundleContent()),
+			CertificateAuthority: string(caBundle),
 		},
 
 		ClaimMappings: apiserver.ClaimMappings{
@@ -123,8 +138,7 @@ func New(
 
 	// generate tokenAuther from oidc config
 	tokenAuther, err := oidc.New(ctx.TODO(), oidc.Options{
-		CAContentProvider: caFromFile,
-		//RequiredClaims:       oidcOptions.RequiredClaims,
+		CAContentProvider:    caContentProvider,
 		SupportedSigningAlgs: oidcOptions.SigningAlgs,
 		JWTAuthenticator:     jwtConfig,
 	})
