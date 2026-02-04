@@ -58,7 +58,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			// Load and parse cluster configuration
 			clusterConfigs, err := LoadClusterConfig(opts.App.Cluster.Config)
 			if err != nil {
-				return fmt.Errorf("failed to load cluster config: %w", err)
+				logger.Logger.Warn("failed to load cluster config", zap.Error(err))
 			}
 
 			var clusterRBACConfigs map[string]util.RBAC
@@ -68,10 +68,10 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 					// Load RBAC role configurations
 					clusterRBACConfigs, err = util.LoadRBACConfig(opts.App.Cluster.RoleConfig)
 					if err != nil {
-						return fmt.Errorf("failed to load RBAC config: %w", err)
+						logger.Logger.Error("failed to load RBAC config", zap.Error(err))
 					}
 				} else {
-					return fmt.Errorf("RBAC config file not found: %s", opts.App.Cluster.RoleConfig)
+					logger.Logger.Error("RBAC config file not found", zap.String("path", opts.App.Cluster.RoleConfig))
 				}
 			}
 
