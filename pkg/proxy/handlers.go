@@ -7,15 +7,16 @@ import (
 	"net/http"
 	"strings"
 
+	"go.uber.org/zap"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/transport"
-	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/kubeapiserver/admission/exclusion"
 
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/audit"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/logging"
@@ -98,7 +99,7 @@ func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
 		// Auth request and handle unauthed
 		info, ok, err := p.oidcRequestAuther.AuthenticateRequest(req)
 		if err != nil {
-			klog.V(5).Infof("Authenticated request failed: %s", err)
+			logger.Logger.Debug("Authenticated request failed", zap.Error(err))
 			// Since we have failed OIDC auth, we will try a token review, if enabled.
 			tokenReviewHandler.ServeHTTP(rw, req)
 			return
@@ -113,7 +114,7 @@ func (p *Proxy) withAuthenticateRequest(handler http.Handler) http.Handler {
 		var remoteAddr string
 		req, remoteAddr = context.RemoteAddr(req)
 
-		klog.V(4).Infof("authenticated request: %s", remoteAddr)
+		logger.Logger.Debug("authenticated request", zap.String("remoteAddr", remoteAddr))
 
 		// Add the user info to the request context
 		req = req.WithContext(genericapirequest.WithUser(req.Context(), info.User))
@@ -162,7 +163,7 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 
 		// If we have disabled impersonation we can forward the request right away
 		if p.config.DisableImpersonation {
-			klog.V(2).Infof("passing on request with no impersonation: %s", remoteAddr)
+			logger.Logger.Debug("passing on request with no impersonation", zap.String("remoteAddr", remoteAddr))
 			// Indicate we need to not use impersonation.
 			req = context.WithNoImpersonation(req)
 			handler.ServeHTTP(rw, req)
@@ -217,8 +218,10 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 		// If client IP user extra header option set then append the remote client
 		// address.
 		if p.config.ExtraUserHeadersClientIPEnabled {
-			klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
-				UserHeaderClientIPKey, remoteAddr, remoteAddr)
+			logger.Logger.Debug("adding impersonate extra user header",
+				zap.String("key", UserHeaderClientIPKey),
+				zap.String("value", remoteAddr),
+				zap.String("remoteAddr", remoteAddr))
 
 			extra[UserHeaderClientIPKey] = append(extra[UserHeaderClientIPKey], remoteAddr)
 		}
@@ -226,8 +229,10 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 		// Add custom extra user headers to impersonation request.
 		for k, vs := range p.config.ExtraUserHeaders {
 			for _, v := range vs {
-				klog.V(6).Infof("adding impersonate extra user header %s: %s (%s)",
-					k, v, remoteAddr)
+				logger.Logger.Debug("adding impersonate extra user header",
+					zap.String("key", k),
+					zap.String("value", v),
+					zap.String("remoteAddr", remoteAddr))
 
 				extra[k] = append(extra[k], v)
 			}
@@ -282,14 +287,14 @@ func (p *Proxy) withImpersonateRequest(handler http.Handler) http.Handler {
 func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, err error) {
 
 	unauthedHandler := audit.NewUnauthenticatedHandler(p.auditor, func(rw http.ResponseWriter, r *http.Request) {
-		klog.V(2).Infof("unauthenticated user request %s", r.RemoteAddr)
+		logger.Logger.Debug("unauthenticated user request", zap.String("remoteAddr", r.RemoteAddr))
 		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
 	})
 
 	return func(rw http.ResponseWriter, r *http.Request, err error) {
 
 		if err == nil {
-			klog.Error("error was called with no error")
+			logger.Logger.Error("error was called with no error")
 			http.Error(rw, "", http.StatusInternalServerError)
 			return
 		}
@@ -307,13 +312,15 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 
 			// No name given or available in oidc request
 		case errNoName:
-			klog.V(2).Infof("no name available in oidc info %s", r.RemoteAddr)
+			logger.Logger.Debug("no name available in oidc info", zap.String("remoteAddr", r.RemoteAddr))
 			http.Error(rw, "Username claim not available in OIDC Issuer response", http.StatusForbidden)
 			return
 
 			// No impersonation configuration found in context
 		case cluster.ErrNoImpersonationConfig:
-			klog.Errorf("if you are seeing this, there is likely a bug in the proxy (%s): %s", r.RemoteAddr, err)
+			logger.Logger.Error("if you are seeing this, there is likely a bug in the proxy",
+				zap.String("remoteAddr", r.RemoteAddr),
+				zap.Error(err))
 			http.Error(rw, "", http.StatusInternalServerError)
 			return
 
@@ -326,10 +333,14 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 		default:
 
 			if strings.Contains(err.Error(), "not allowed to impersonate") {
-				klog.V(2).Infof(err.Error(), r.RemoteAddr)
+				logger.Logger.Debug("impersonation not allowed",
+					zap.String("remoteAddr", r.RemoteAddr),
+					zap.Error(err))
 				http.Error(rw, err.Error(), http.StatusForbidden)
 			} else {
-				klog.Errorf("unknown error (%s): %s", r.RemoteAddr, err)
+				logger.Logger.Error("unknown error",
+					zap.String("remoteAddr", r.RemoteAddr),
+					zap.Error(err))
 				http.Error(rw, err.Error(), http.StatusInternalServerError)
 			}
 

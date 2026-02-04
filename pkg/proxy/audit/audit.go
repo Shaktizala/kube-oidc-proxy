@@ -9,16 +9,16 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
+	"github.com/go-resty/resty/v2"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/sets"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/server"
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/component-base/version"
-	"k8s.io/klog/v2"
-
-	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
-	"github.com/go-resty/resty/v2"
 )
 
 type Audit struct {
@@ -110,7 +110,7 @@ func (a *Audit) Shutdown() error {
 // WithRequest will wrap the given handler to inject the request information
 // into the context which is then used by the wrapped audit handler.
 func (a *Audit) WithRequest(handler http.Handler) http.Handler {
-	klog.V(4).Infof("Enabling audit for proxy requests")
+	logger.Logger.Debug("Enabling audit for proxy requests")
 	handler = genericapifilters.WithAudit(handler, a.serverConfig.AuditBackend, a.serverConfig.AuditPolicyRuleEvaluator, a.serverConfig.LongRunningFunc)
 	handler = genericapifilters.WithAuditInit(handler)
 	return genericapifilters.WithRequestInfo(handler, a.serverConfig.RequestInfoResolver)
@@ -130,7 +130,7 @@ func (a *Audit) WithCustomAuditLog(handler http.Handler) http.Handler {
 
 		parts := strings.Split(r.URL.Path, "/")
 		if len(parts) < 2 {
-			klog.V(4).Info("Invalid request: No cluster name in the request")
+			logger.Logger.Debug("Invalid request: No cluster name in the request")
 			handler.ServeHTTP(w, r)
 			return
 		}
@@ -138,24 +138,24 @@ func (a *Audit) WithCustomAuditLog(handler http.Handler) http.Handler {
 
 		requestInfo, found := request.RequestInfoFrom(r.Context())
 		if !found || !requestInfo.IsResourceRequest {
-			klog.V(4).Info("Invalid request: No RequestInfo or not a resource request")
+			logger.Logger.Debug("Invalid request: No RequestInfo or not a resource request")
 			handler.ServeHTTP(w, r)
 			return
 		}
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			klog.Errorf("Error reading request body: %v", err)
+			logger.Logger.Error("Error reading request body", zap.Error(err))
 		}
 		if len(bodyBytes) == 0 {
-			klog.V(4).Info("Empty request body")
+			logger.Logger.Debug("Empty request body")
 			bodyBytes = []byte("{}")
 		}
 
 		// get user info from request
 		userInfo, ok := request.UserFrom(r.Context())
 		if !ok {
-			klog.V(4).Info("No user info found in the request")
+			logger.Logger.Debug("No user info found in the request")
 		}
 
 		a.SendAuditLog(Log{
@@ -192,15 +192,17 @@ func (a *Audit) WithCustomAuditLog(handler http.Handler) http.Handler {
 func (a *Audit) SendAuditLog(log Log) {
 	r, err := a.client.R().SetBody(log).Post("/api/v1/k8s-audit-log/webhook")
 	if err != nil {
-		klog.Errorf("Error sending audit log to webhook: %v", err)
+		logger.Logger.Error("Error sending audit log to webhook", zap.Error(err))
 		return
 
 	}
 	if r == nil {
-		klog.Errorf("Error sending audit log to webhook: response is nil")
+		logger.Logger.Error("Error sending audit log to webhook: response is nil")
 		return
 	}
 	if r.IsError() || r.StatusCode() != http.StatusOK {
-		klog.Errorf("Error sending audit log to webhook: %v", r.String())
+		logger.Logger.Error("Error sending audit log to webhook",
+			zap.String("response", r.String()),
+			zap.Int("status_code", r.StatusCode()))
 	}
 }

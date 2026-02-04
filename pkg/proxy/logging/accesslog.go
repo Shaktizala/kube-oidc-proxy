@@ -1,18 +1,16 @@
-// Copyright Jetstack Ltd. See LICENSE for details.
 package logging
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
+	"go.uber.org/zap"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 const (
 	UserHeaderClientIPKey = "Remote-Client-IP"
-	timestampLayout       = "2006-01-02T15:04:05-0700"
 )
 
 // logs the request
@@ -23,31 +21,27 @@ func LogSuccessfulRequest(req *http.Request, inboundUser user.Info, outboundUser
 		remoteAddr = remoteAddr[0:indexOfColon]
 	}
 
-	inboundExtras := ""
-
-	if inboundUser.GetExtra() != nil {
-		for key, value := range inboundUser.GetExtra() {
-			inboundExtras += key + "=" + strings.Join(value, "|") + " "
-		}
-	}
-
-	outboundUserLog := ""
-
-	if outboundUser != nil {
-		outboundExtras := ""
-
-		if outboundUser.GetExtra() != nil {
-			for key, value := range outboundUser.GetExtra() {
-				outboundExtras += key + "=" + strings.Join(value, "|") + " "
-			}
-		}
-
-		outboundUserLog = fmt.Sprintf(" outbound:[%s / %s / %s / %s]", outboundUser.GetName(), strings.Join(outboundUser.GetGroups(), "|"), outboundUser.GetUID(), outboundExtras)
-	}
-
 	xFwdFor := findXForwardedFor(req.Header, remoteAddr)
 
-	fmt.Printf("[%s] AuSuccess src:[%s / % s] URI:%s inbound:[%s / %s / %s]%s\n", time.Now().Format(timestampLayout), remoteAddr, xFwdFor, req.RequestURI, inboundUser.GetName(), strings.Join(inboundUser.GetGroups(), "|"), inboundExtras, outboundUserLog)
+	fields := []zap.Field{
+		zap.String("src_ip", remoteAddr),
+		zap.String("x_forwarded_for", xFwdFor),
+		zap.String("uri", req.RequestURI),
+		zap.String("inbound_user", inboundUser.GetName()),
+		zap.Strings("inbound_groups", inboundUser.GetGroups()),
+		zap.Any("inbound_extra", inboundUser.GetExtra()),
+	}
+
+	if outboundUser != nil {
+		fields = append(fields,
+			zap.String("outbound_user", outboundUser.GetName()),
+			zap.Strings("outbound_groups", outboundUser.GetGroups()),
+			zap.String("outbound_uid", outboundUser.GetUID()),
+			zap.Any("outbound_extra", outboundUser.GetExtra()),
+		)
+	}
+
+	logger.Logger.Info("AuSuccess", fields...)
 }
 
 // determines if the x-forwarded-for header is present, if so remove
@@ -90,5 +84,8 @@ func LogFailedRequest(req *http.Request) {
 		remoteAddr = remoteAddr[0:indexOfColon]
 	}
 
-	fmt.Printf("[%s] AuFail src:[%s / % s] URI:%s\n", time.Now().Format(timestampLayout), remoteAddr, req.Header.Get(("x-forwarded-for")), req.RequestURI)
+	logger.Logger.Info("AuFail",
+		zap.String("src_ip", remoteAddr),
+		zap.String("x_forwarded_for", req.Header.Get("x-forwarded-for")),
+		zap.String("uri", req.RequestURI))
 }

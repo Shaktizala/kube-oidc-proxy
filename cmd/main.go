@@ -7,11 +7,9 @@ import (
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
-	"k8s.io/klog/v2"
 )
 
 func main() {
-	klog.InitFlags(nil)
 	stopCh := util.SignalHandler()
 	cmd := app.NewRunCommand(stopCh)
 

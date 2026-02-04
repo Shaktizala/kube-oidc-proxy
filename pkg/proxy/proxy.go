@@ -18,6 +18,8 @@ import (
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/context"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/hooks"
 
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -27,7 +29,6 @@ import (
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -87,7 +88,9 @@ func (caFromFile CAFromFile) CurrentCABundleContent() []byte {
 	}
 	res, err := os.ReadFile(caFromFile.CAFile)
 	if err != nil {
-		klog.Errorf("unable to read CA file %s: %s", caFromFile.CAFile, err)
+		logger.Logger.Error("unable to read CA file",
+			zap.String("path", caFromFile.CAFile),
+			zap.Error(err))
 		return nil
 	}
 	return res
@@ -222,19 +225,20 @@ func (p *Proxy) reviewToken(rw http.ResponseWriter, req *http.Request) bool {
 	req.URL.Path = strings.TrimPrefix(req.URL.Path, "/"+clusterName)
 	config := p.clusterManager.GetCluster(clusterName)
 
-	klog.V(4).Infof("attempting to validate a token in request using TokenReview endpoint(%s)",
-		remoteAddr)
+	logger.Logger.Debug("attempting to validate a token in request using TokenReview endpoint",
+		zap.String("remoteAddr", remoteAddr))
 
 	ok, err := config.TokenReviewer.Review(req)
 	if err != nil {
-		klog.Errorf("unable to authenticate the request via TokenReview due to an error (%s): %s",
-			remoteAddr, err)
+		logger.Logger.Error("unable to authenticate the request via TokenReview due to an error",
+			zap.String("remoteAddr", remoteAddr),
+			zap.Error(err))
 		return false
 	}
 
 	if !ok {
-		klog.V(4).Infof("passing request with valid token through (%s)",
-			remoteAddr)
+		logger.Logger.Debug("passing request with valid token through",
+			zap.String("remoteAddr", remoteAddr))
 
 		return false
 	}
