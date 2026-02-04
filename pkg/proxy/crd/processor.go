@@ -190,8 +190,7 @@ func determineRoleRefKindAndAPIGroup(roleRef string, ctrl *CAPIRbacWatcher, name
 func (ctrl *CAPIRbacWatcher) ProcessCAPIRole(capiRole *CAPIRole) {
 	targetClusters := determineTargetClusters(capiRole.Spec.CommonRoleSpec.TargetClusters, ctrl.clusters)
 	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
-		logger.Logger.Warn("Skipping role because it doesn't contain target clusters",
-			zap.String("name", capiRole.Name))
+		logger.Logger.Warn("Skipping role because it doesn't contain target clusters", zap.String("name", capiRole.Name))
 		return
 	}
 
