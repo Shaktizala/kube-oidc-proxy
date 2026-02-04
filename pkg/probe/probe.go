@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
 	"github.com/heptiolabs/healthcheck"
+	"go.uber.org/zap"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -40,7 +41,7 @@ func Run(port, fakeJWT string, oidcAuther authenticator.Token) error {
 		for {
 			err := http.ListenAndServe(net.JoinHostPort("0.0.0.0", port), h.handler)
 			if err != nil {
-				klog.Errorf("ready probe listener failed: %s", err)
+				logger.Logger.Error("ready probe listener failed", zap.Error(err))
 			}
 			time.Sleep(5 * time.Second)
 		}
@@ -60,13 +61,13 @@ func (h *HealthCheck) Check() error {
 	_, _, err := h.oidcAuther.AuthenticateToken(ctx, h.fakeJWT)
 	if err != nil && strings.HasSuffix(err.Error(), "authenticator not initialized") {
 		err = fmt.Errorf("OIDC provider not yet initialized: %s", err)
-		klog.V(4).Infof(err.Error())
+		logger.Logger.Debug("OIDC provider not yet initialized", zap.Error(err))
 		return err
 	}
 
 	h.ready = true
 
-	klog.V(4).Info("OIDC provider initialized.")
+	logger.Logger.Debug("OIDC provider initialized")
 
 	return nil
 }

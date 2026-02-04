@@ -14,15 +14,16 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
 
 	"github.com/Improwised/kube-oidc-proxy/cmd/app/options"
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
 	"github.com/Improwised/kube-oidc-proxy/pkg/clustermanager"
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
 	"github.com/Improwised/kube-oidc-proxy/pkg/probe"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/crd"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -46,6 +47,9 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 		Use:  options.AppName,
 		Long: "kube-oidc-proxy is a reverse proxy to authenticate users to Kubernetes API servers with Open ID Connect Authentication.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Initialize logger with log level from flags
+			logger.Init(opts.Misc.LogLevel)
+
 			// Validate command line options
 			if err := opts.Validate(cmd); err != nil {
 				return fmt.Errorf("options validation failed: %w", err)
@@ -54,7 +58,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 			// Load and parse cluster configuration
 			clusterConfigs, err := LoadClusterConfig(opts.App.Cluster.Config)
 			if err != nil {
-				klog.Warningf("failed to load cluster config: %v", err.Error())
+				logger.Logger.Warn("failed to load cluster config", zap.Error(err))
 			}
 
 			var clusterRBACConfigs map[string]util.RBAC
@@ -64,17 +68,17 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 					// Load RBAC role configurations
 					clusterRBACConfigs, err = util.LoadRBACConfig(opts.App.Cluster.RoleConfig)
 					if err != nil {
-						klog.Errorf("failed to load RBAC config: %v", err.Error())
+						logger.Logger.Error("failed to load RBAC config", zap.Error(err))
 					}
 				} else {
-					klog.Errorf("RBAC config file not found: %v", err.Error())
+					logger.Logger.Error("RBAC config file not found", zap.String("path", opts.App.Cluster.RoleConfig))
 				}
 			}
 
 			// Initialize CAPI RBAC watcher if available
 			capiRBACWatcher, err := crd.NewCAPIRbacWatcher(clusterConfigs)
 			if err != nil {
-				klog.Errorf("Failed to initialize CAPI RBAC watcher: %v", err)
+				logger.Logger.Error("Failed to initialize CAPI RBAC watcher", zap.Error(err))
 				capiRBACWatcher = nil // Continue without watcher if initialization fails
 			}
 
@@ -96,7 +100,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			// Start CAPI RBAC watcher if available
 			if capiRBACWatcher != nil {
-				klog.V(5).Info("Starting CAPI RBAC watcher")
+				logger.Logger.Debug("Starting CAPI RBAC watcher")
 				capiRBACWatcher.Start(stopCh)
 				capiRBACWatcher.ProcessExistingRBACObjects()
 			}
@@ -146,7 +150,7 @@ func buildRunCommand(stopCh <-chan struct{}, opts *options.Options) *cobra.Comma
 
 			// Start the secret controller with proper controller pattern
 			if err := clusterManager.StartSecretController(ctx, opts.SecretNamespace, opts.SecretName, 1); err != nil {
-				klog.Errorf("failed to start secret controller: %v", err.Error())
+				logger.Logger.Error("failed to start secret controller", zap.Error(err))
 			}
 
 			// Generate fake JWT for readiness probe
@@ -215,11 +219,11 @@ func LoadClusterConfig(path string) ([]*cluster.Cluster, error) {
 
 	for _, clusterConfig := range config.Clusters {
 		if clusterConfig.Name == "" {
-			klog.Warningf("found empty cluster name, skipping that cluster")
+			logger.Logger.Warn("found empty cluster name, skipping that cluster")
 			continue
 		}
 		if _, exists := clusterNames[clusterConfig.Name]; exists {
-			klog.Warningf("duplicate cluster name: %s, skipping this cluster", clusterConfig.Name)
+			logger.Logger.Warn("duplicate cluster name, skipping this cluster", zap.String("name", clusterConfig.Name))
 			continue
 		}
 
@@ -240,14 +244,14 @@ func getCurrentNamespace() string {
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		klog.Errorf("failed to get incluster config: %v", err)
+		logger.Logger.Error("failed to get incluster config", zap.Error(err))
 		return ns
 	}
 
 	// Create Kubernetes client
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		klog.Errorf("failed to create clientset: %v", err)
+		logger.Logger.Error("failed to create clientset", zap.Error(err))
 		return ns
 	}
 
@@ -258,7 +262,7 @@ func getCurrentNamespace() string {
 		LabelSelector: labelSelector,
 	})
 	if err != nil {
-		klog.Errorf("error listing services: %v", err)
+		logger.Logger.Error("error listing services", zap.Error(err))
 		return ns
 	}
 
@@ -293,14 +297,14 @@ func initStaticClusters(clusterConfigs []*cluster.Cluster, clusterManager *clust
 			// Create REST config for the cluster
 			restConfig, err := clientOptions.ToRESTConfig()
 			if err != nil {
-				klog.Warningf("failed to create REST config for cluster %s: %v", c.Name, err)
+				logger.Logger.Warn("failed to create REST config for cluster", zap.String("cluster", c.Name), zap.Error(err))
 				return
 			}
 			c.RestConfig = restConfig
 
 			// Set up the cluster in the manager
 			if err := clusterManager.ClusterSetup(c); err != nil {
-				klog.Warningf("failed to setup cluster %s: %v", c.Name, err)
+				logger.Logger.Warn("failed to setup cluster", zap.String("cluster", c.Name), zap.Error(err))
 				return
 			}
 			c.IsStatic = true // Mark as statically configured

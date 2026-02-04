@@ -1,16 +1,18 @@
 package crd
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 )
 
 type CAPIRbacWatcher struct {
@@ -75,12 +77,12 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	w.CAPIRoleInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			if !w.initialProcessingComplete {
-				klog.V(10).Infof("Skipping CAPIRole add event during initial processing")
+				logger.Logger.Debug("Skipping CAPIRole add event during initial processing")
 				return
 			}
 			capiRole, err := ConvertUnstructured[CAPIRole](obj)
 			if err != nil {
-				klog.Errorf("Failed to convert CAPIRole: %v", err)
+				logger.Logger.Error("Failed to convert CAPIRole", zap.Error(err))
 				return
 			}
 			w.ProcessCAPIRole(capiRole)
@@ -89,16 +91,16 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldCapiRole, err := ConvertUnstructured[CAPIRole](oldObj)
 			if err != nil {
-				klog.Errorf("Failed to convert old CAPIRole: %v", err)
+				logger.Logger.Error("Failed to convert old CAPIRole", zap.Error(err))
 				return
 			}
 			newCapiRole, err := ConvertUnstructured[CAPIRole](newObj)
 			if err != nil {
-				klog.Errorf("Failed to convert new CAPIRole: %v", err)
+				logger.Logger.Error("Failed to convert new CAPIRole", zap.Error(err))
 				return
 			}
 			if oldCapiRole.ResourceVersion == newCapiRole.ResourceVersion {
-				klog.V(5).Infof("ResourceVersion is the same, skipping update")
+				logger.Logger.Debug("ResourceVersion is the same, skipping update")
 				return
 			}
 			w.DeleteCAPIRole(oldCapiRole)
@@ -108,12 +110,12 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		DeleteFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
-				klog.Errorf("Unexpected type %T in DeleteFunc for CAPIRole", obj)
+				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIRole", zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			capiRole, err := ConvertUnstructured[CAPIRole](u)
 			if err != nil {
-				klog.Errorf("Failed to convert CAPIRole during deletion: %v", err)
+				logger.Logger.Error("Failed to convert CAPIRole during deletion", zap.Error(err))
 				return
 			}
 			w.DeleteCAPIRole(capiRole)
@@ -125,12 +127,12 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	w.CAPIClusterRoleInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			if !w.initialProcessingComplete {
-				klog.V(10).Infof("Skipping CAPIClusterRole add event during initial processing")
+				logger.Logger.Debug("Skipping CAPIClusterRole add event during initial processing")
 				return
 			}
 			capiClusterRole, err := ConvertUnstructured[CAPIClusterRole](obj)
 			if err != nil {
-				klog.Errorf("Failed to convert CAPIClusterRole: %v", err)
+				logger.Logger.Error("Failed to convert CAPIClusterRole", zap.Error(err))
 				return
 			}
 			w.ProcessCAPIClusterRole(capiClusterRole)
@@ -139,16 +141,16 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldCapiClusterRole, err := ConvertUnstructured[CAPIClusterRole](oldObj)
 			if err != nil {
-				klog.Errorf("Failed to convert old CAPIClusterRole: %v", err)
+				logger.Logger.Error("Failed to convert old CAPIClusterRole", zap.Error(err))
 				return
 			}
 			newCapiClusterRole, err := ConvertUnstructured[CAPIClusterRole](newObj)
 			if err != nil {
-				klog.Errorf("Failed to convert new CAPIClusterRole: %v", err)
+				logger.Logger.Error("Failed to convert new CAPIClusterRole", zap.Error(err))
 				return
 			}
 			if oldCapiClusterRole.ResourceVersion == newCapiClusterRole.ResourceVersion {
-				klog.V(5).Infof("ResourceVersion is the same, skipping update")
+				logger.Logger.Debug("ResourceVersion is the same, skipping update")
 				return
 			}
 			w.DeleteCAPIClusterRole(oldCapiClusterRole)
@@ -158,12 +160,12 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		DeleteFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
-				klog.Errorf("Unexpected type %T in DeleteFunc for CAPIClusterRole", obj)
+				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIClusterRole", zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			capiClusterRole, err := ConvertUnstructured[CAPIClusterRole](u)
 			if err != nil {
-				klog.Errorf("Failed to convert CAPIClusterRole during deletion: %v", err)
+				logger.Logger.Error("Failed to convert CAPIClusterRole during deletion", zap.Error(err))
 				return
 			}
 			w.DeleteCAPIClusterRole(capiClusterRole)
@@ -175,12 +177,12 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	w.CAPIRoleBindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			if !w.initialProcessingComplete {
-				klog.V(10).Infof("Skipping CAPIRoleBinding add event during initial processing")
+				logger.Logger.Debug("Skipping CAPIRoleBinding add event during initial processing")
 				return
 			}
 			capiRoleBinding, err := ConvertUnstructured[CAPIRoleBinding](obj)
 			if err != nil {
-				klog.Errorf("Failed to convert CAPIRoleBinding: %v", err)
+				logger.Logger.Error("Failed to convert CAPIRoleBinding", zap.Error(err))
 				return
 			}
 			w.ProcessCAPIRoleBinding(capiRoleBinding)
@@ -189,16 +191,16 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldCapiRoleBinding, err := ConvertUnstructured[CAPIRoleBinding](oldObj)
 			if err != nil {
-				klog.Errorf("Failed to convert old CAPIRoleBinding: %v", err)
+				logger.Logger.Error("Failed to convert old CAPIRoleBinding", zap.Error(err))
 				return
 			}
 			newCapiRoleBinding, err := ConvertUnstructured[CAPIRoleBinding](newObj)
 			if err != nil {
-				klog.Errorf("Failed to convert new CAPIRoleBinding: %v", err)
+				logger.Logger.Error("Failed to convert new CAPIRoleBinding", zap.Error(err))
 				return
 			}
 			if oldCapiRoleBinding.ResourceVersion == newCapiRoleBinding.ResourceVersion {
-				klog.V(5).Infof("ResourceVersion is the same, skipping update")
+				logger.Logger.Debug("ResourceVersion is the same, skipping update")
 				return
 			}
 			w.DeleteCAPIRoleBinding(oldCapiRoleBinding)
@@ -208,12 +210,12 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		DeleteFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
-				klog.Errorf("Unexpected type %T in DeleteFunc for CAPIRoleBinding", obj)
+				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIRoleBinding", zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			capiRoleBinding, err := ConvertUnstructured[CAPIRoleBinding](u)
 			if err != nil {
-				klog.Errorf("Failed to convert CAPIRoleBinding during deletion: %v", err)
+				logger.Logger.Error("Failed to convert CAPIRoleBinding during deletion", zap.Error(err))
 				return
 			}
 			w.DeleteCAPIRoleBinding(capiRoleBinding)
@@ -225,12 +227,12 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 	w.CAPIClusterRoleBindingInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			if !w.initialProcessingComplete {
-				klog.V(10).Infof("Skipping CAPIClusterRoleBinding add event during initial processing")
+				logger.Logger.Debug("Skipping CAPIClusterRoleBinding add event during initial processing")
 				return
 			}
 			capiClusterRoleBinding, err := ConvertUnstructured[CAPIClusterRoleBinding](obj)
 			if err != nil {
-				klog.Errorf("Failed to convert CAPIClusterRoleBinding: %v", err)
+				logger.Logger.Error("Failed to convert CAPIClusterRoleBinding", zap.Error(err))
 				return
 			}
 			w.ProcessCAPIClusterRoleBinding(capiClusterRoleBinding)
@@ -239,16 +241,16 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldCapiClusterRoleBinding, err := ConvertUnstructured[CAPIClusterRoleBinding](oldObj)
 			if err != nil {
-				klog.Errorf("Failed to convert old CAPIClusterRoleBinding: %v", err)
+				logger.Logger.Error("Failed to convert old CAPIClusterRoleBinding", zap.Error(err))
 				return
 			}
 			newCapiClusterRoleBinding, err := ConvertUnstructured[CAPIClusterRoleBinding](newObj)
 			if err != nil {
-				klog.Errorf("Failed to convert new CAPIClusterRoleBinding: %v", err)
+				logger.Logger.Error("Failed to convert new CAPIClusterRoleBinding", zap.Error(err))
 				return
 			}
 			if oldCapiClusterRoleBinding.ResourceVersion == newCapiClusterRoleBinding.ResourceVersion {
-				klog.V(5).Infof("ResourceVersion is the same, skipping update")
+				logger.Logger.Debug("ResourceVersion is the same, skipping update")
 				return
 			}
 			w.DeleteCAPIClusterRoleBinding(oldCapiClusterRoleBinding)
@@ -258,12 +260,12 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		DeleteFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
-				klog.Errorf("Unexpected type %T in DeleteFunc for CAPIClusterRoleBinding", obj)
+				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIClusterRoleBinding", zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			capiClusterRoleBinding, err := ConvertUnstructured[CAPIClusterRoleBinding](u)
 			if err != nil {
-				klog.Errorf("Failed to convert CAPIClusterRoleBinding during deletion: %v", err)
+				logger.Logger.Error("Failed to convert CAPIClusterRoleBinding during deletion", zap.Error(err))
 				return
 			}
 			w.DeleteCAPIClusterRoleBinding(capiClusterRoleBinding)

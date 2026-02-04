@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/rbac/v1"
 	apisv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/klog/v2"
 	rbacvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
@@ -196,7 +197,7 @@ func loadExistingRBAC(cluster *cluster.Cluster) error {
 		// List Roles
 		roles, err := cluster.Kubeclient.RbacV1().Roles(ns.Name).List(context.Background(), apisv1.ListOptions{})
 		if err != nil {
-			klog.Warningf("Failed to list Roles in namespace %s: %v", ns.Name, err)
+			logger.Logger.Warn("Failed to list Roles in namespace", zap.String("namespace", ns.Name), zap.Error(err))
 			continue
 		}
 		for i := range roles.Items {
@@ -206,7 +207,7 @@ func loadExistingRBAC(cluster *cluster.Cluster) error {
 		// List RoleBindings
 		roleBindings, err := cluster.Kubeclient.RbacV1().RoleBindings(ns.Name).List(context.Background(), apisv1.ListOptions{})
 		if err != nil {
-			klog.Warningf("Failed to list RoleBindings in namespace %s: %v", ns.Name, err)
+			logger.Logger.Warn("Failed to list RoleBindings in namespace", zap.String("namespace", ns.Name), zap.Error(err))
 			continue
 		}
 		for i := range roleBindings.Items {
@@ -244,7 +245,7 @@ func setupRBACWatchers(cluster *cluster.Cluster) error {
 		for event := range watchClusterRoles.ResultChan() {
 			clusterRole, ok := event.Object.(*v1.ClusterRole)
 			if !ok {
-				klog.Errorf("Unexpected object type in ClusterRole watch: %T", event.Object)
+				logger.Logger.Error("Unexpected object type in ClusterRole watch", zap.String("got", fmt.Sprintf("%T", event.Object)))
 				continue
 			}
 
@@ -275,7 +276,7 @@ func setupRBACWatchers(cluster *cluster.Cluster) error {
 		for event := range watchClusterRoleBindings.ResultChan() {
 			crb, ok := event.Object.(*v1.ClusterRoleBinding)
 			if !ok {
-				klog.Errorf("Unexpected object type in ClusterRoleBinding watch: %T", event.Object)
+				logger.Logger.Error("Unexpected object type in ClusterRoleBinding watch", zap.String("got", fmt.Sprintf("%T", event.Object)))
 				continue
 			}
 
@@ -306,7 +307,7 @@ func setupRBACWatchers(cluster *cluster.Cluster) error {
 		for event := range watchNamespaces.ResultChan() {
 			ns, ok := event.Object.(*corev1.Namespace)
 			if !ok {
-				klog.Errorf("Unexpected object type in Namespace watch: %T", event.Object)
+				logger.Logger.Error("Unexpected object type in Namespace watch", zap.String("got", fmt.Sprintf("%T", event.Object)))
 				continue
 			}
 
@@ -315,14 +316,14 @@ func setupRBACWatchers(cluster *cluster.Cluster) error {
 				// Set up Role watcher for new namespace
 				watchRoles, err := cluster.Kubeclient.RbacV1().Roles(ns.Name).Watch(context.Background(), apisv1.ListOptions{})
 				if err != nil {
-					klog.Errorf("Failed to watch Roles in namespace %s: %v", ns.Name, err)
+					logger.Logger.Error("Failed to watch Roles in namespace", zap.String("namespace", ns.Name), zap.Error(err))
 					continue
 				}
 
 				// Set up RoleBinding watcher for new namespace
 				watchRoleBindings, err := cluster.Kubeclient.RbacV1().RoleBindings(ns.Name).Watch(context.Background(), apisv1.ListOptions{})
 				if err != nil {
-					klog.Errorf("Failed to watch RoleBindings in namespace %s: %v", ns.Name, err)
+					logger.Logger.Error("Failed to watch RoleBindings in namespace", zap.String("namespace", ns.Name), zap.Error(err))
 					continue
 				}
 
@@ -342,7 +343,7 @@ func watchNamespaceRoles(watchRoles watch.Interface, cluster *cluster.Cluster) {
 	for event := range watchRoles.ResultChan() {
 		role, ok := event.Object.(*v1.Role)
 		if !ok {
-			klog.Errorf("Unexpected object type in Role watch: %T", event.Object)
+			logger.Logger.Error("Unexpected object type in Role watch", zap.String("got", fmt.Sprintf("%T", event.Object)))
 			continue
 		}
 
@@ -372,7 +373,7 @@ func watchNamespaceRoleBindings(watchRoleBindings watch.Interface, cluster *clus
 	for event := range watchRoleBindings.ResultChan() {
 		rb, ok := event.Object.(*v1.RoleBinding)
 		if !ok {
-			klog.Errorf("Unexpected object type in RoleBinding watch: %T", event.Object)
+			logger.Logger.Error("Unexpected object type in RoleBinding watch", zap.String("got", fmt.Sprintf("%T", event.Object)))
 			continue
 		}
 

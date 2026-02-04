@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/crd"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/rbac"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/subjectaccessreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/proxy/tokenreview"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -22,7 +24,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
 )
 
 // ClusterManager manages a collection of Kubernetes clusters, providing functionality
@@ -166,7 +167,7 @@ func NewSecretController(clusterManager *ClusterManager, namespace, secretName s
 		AddFunc: func(obj interface{}) {
 			secret, ok := obj.(*corev1.Secret)
 			if !ok {
-				klog.Errorf("Unexpected object type in AddFunc: expected Secret, got %T", obj)
+				logger.Logger.Error("Unexpected object type in AddFunc", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			// Only process the specific secret we're interested in
@@ -177,12 +178,12 @@ func NewSecretController(clusterManager *ClusterManager, namespace, secretName s
 		UpdateFunc: func(old interface{}, new interface{}) {
 			newSecret, ok := new.(*corev1.Secret)
 			if !ok {
-				klog.Errorf("Unexpected object type in UpdateFunc: expected Secret, got %T", new)
+				logger.Logger.Error("Unexpected object type in UpdateFunc (new)", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", new)))
 				return
 			}
 			oldSecret, ok := old.(*corev1.Secret)
 			if !ok {
-				klog.Errorf("Unexpected object type in UpdateFunc: expected Secret, got %T", old)
+				logger.Logger.Error("Unexpected object type in UpdateFunc (old)", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", old)))
 				return
 			}
 
@@ -200,11 +201,11 @@ func NewSecretController(clusterManager *ClusterManager, namespace, secretName s
 				if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
 					secret, ok = tombstone.Obj.(*corev1.Secret)
 					if !ok {
-						klog.Errorf("Unexpected object type in DeleteFunc tombstone: expected Secret, got %T", tombstone.Obj)
+						logger.Logger.Error("Unexpected object type in DeleteFunc tombstone", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", tombstone.Obj)))
 						return
 					}
 				} else {
-					klog.Errorf("Unexpected object type in DeleteFunc: expected Secret, got %T", obj)
+					logger.Logger.Error("Unexpected object type in DeleteFunc", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", obj)))
 					return
 				}
 			}
@@ -234,8 +235,7 @@ func (sc *SecretController) Run(ctx context.Context, threadiness int) error {
 	// Make sure the work queue is shutdown which will trigger workers to end
 	defer sc.queue.ShutDown()
 
-	logger := klog.FromContext(ctx)
-	logger.Info("Starting secret controller")
+	logger.Logger.Info("Starting secret controller")
 
 	// Start the informer
 	go sc.secretsInformer.Run(ctx.Done())
@@ -251,11 +251,11 @@ func (sc *SecretController) Run(ctx context.Context, threadiness int) error {
 		// then restart the worker after one second
 		go wait.UntilWithContext(ctx, sc.runWorker, time.Second)
 	}
-	logger.Info("Started secret controller workers")
+	logger.Logger.Info("Started secret controller workers")
 
 	// Wait until we're told to stop
 	<-ctx.Done()
-	logger.Info("Shutting down secret controller")
+	logger.Logger.Info("Shutting down secret controller")
 
 	return nil
 }
@@ -317,8 +317,6 @@ func (sc *SecretController) processNextWorkItem(ctx context.Context) bool {
 //
 // syncHandler contains the business logic of the controller [...]
 func (sc *SecretController) syncHandler(ctx context.Context, key interface{}) error {
-	logger := klog.FromContext(ctx)
-
 	// Handle both string keys and direct Secret objects
 	var secret *corev1.Secret
 	switch v := key.(type) {
@@ -330,7 +328,7 @@ func (sc *SecretController) syncHandler(ctx context.Context, key interface{}) er
 		}
 		if !exists {
 			// Secret was deleted
-			logger.V(4).Info("Secret was deleted, removing associated clusters", "key", v)
+			logger.Logger.Debug("Secret was deleted, removing associated clusters", zap.String("key", v))
 			sc.handleSecretDeletion(v)
 			return nil
 		}
@@ -343,13 +341,12 @@ func (sc *SecretController) syncHandler(ctx context.Context, key interface{}) er
 
 	// Verify secret name matches our target
 	if secret.Name != sc.secretName {
-		logger.V(5).Info("Ignoring secret that doesn't match target name",
-			"secretName", secret.Name, "targetName", sc.secretName)
+		logger.Logger.Debug("Ignoring secret that doesn't match target name", zap.String("secretName", secret.Name), zap.String("targetName", sc.secretName))
 		return nil
 	}
 
 	// Process the secret
-	logger.V(4).Info("Processing secret", "name", secret.Name)
+	logger.Logger.Debug("Processing secret", zap.String("name", secret.Name))
 	return sc.clusterManager.updateDynamicClusters(secret)
 }
 
@@ -364,7 +361,7 @@ func (sc *SecretController) handleSecretDeletion(key string) {
 	existingClusters := sc.clusterManager.GetAllClusters()
 	for _, cluster := range existingClusters {
 		if !cluster.IsStatic {
-			klog.V(4).Infof("Removing dynamic cluster %s due to secret deletion", cluster.Name)
+			logger.Logger.Debug("Removing dynamic cluster due to secret deletion", zap.String("clusterName", cluster.Name))
 			sc.clusterManager.RemoveCluster(cluster.Name)
 		}
 	}
@@ -397,7 +394,7 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 	existingClusters := cm.GetAllClusters()
 	for _, cluster := range existingClusters {
 		if _, exists := currentClusters[cluster.Name]; !exists && !cluster.IsStatic {
-			klog.V(4).Infof("Removing dynamic cluster %s as it's no longer in the secret", cluster.Name)
+			logger.Logger.Debug("Removing dynamic cluster as it's no longer in the secret", zap.String("clusterName", cluster.Name))
 			cm.RemoveCluster(cluster.Name)
 		}
 	}
@@ -415,7 +412,7 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 			// Parse the kubeconfig data to create a REST config
 			restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigData)
 			if err != nil {
-				klog.Errorf("Failed to create REST config for cluster %s: %v", clusterName, err)
+				logger.Logger.Error("Failed to create REST config for cluster", zap.String("clusterName", clusterName), zap.Error(err))
 				return
 			}
 
@@ -428,21 +425,21 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 
 			// Set up the cluster with necessary components
 			if err = cm.ClusterSetup(newCluster); err != nil {
-				klog.Errorf("Failed to set up cluster %s: %v", clusterName, err)
+				logger.Logger.Error("Failed to set up cluster", zap.String("clusterName", clusterName), zap.Error(err))
 				return
 			}
 
 			// Run additional setup if a setup function is provided
 			if cm.SetupFunc != nil {
 				if err := cm.SetupFunc(newCluster); err != nil {
-					klog.Errorf("Additional setup failed for cluster %s: %v", clusterName, err)
+					logger.Logger.Error("Additional setup failed for cluster", zap.String("clusterName", clusterName), zap.Error(err))
 					return
 				}
 			}
 
 			// Add or update the cluster in the manager
 			cm.AddOrUpdateCluster(newCluster)
-			klog.V(4).Infof("Successfully added/updated dynamic cluster %s", clusterName)
+			logger.Logger.Debug("Successfully added/updated dynamic cluster", zap.String("clusterName", clusterName))
 
 			// Update CAPI RBAC watcher if available
 			if cm.capiRbacWatcher != nil {
@@ -466,7 +463,7 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 func (cm *ClusterManager) removeDynamicClusters(secret *corev1.Secret) {
 	// Remove each cluster specified in the secret
 	for clusterName := range secret.Data {
-		klog.V(4).Infof("Removing cluster %s due to secret deletion", clusterName)
+		logger.Logger.Debug("Removing cluster due to secret deletion", zap.String("clusterName", clusterName))
 		cm.RemoveCluster(clusterName)
 	}
 
@@ -490,11 +487,11 @@ func (cm *ClusterManager) AddOrUpdateCluster(cluster *cluster.Cluster) {
 	if existing, exists := cm.clusters[cluster.Name]; exists {
 		// Update existing cluster
 		*existing = *cluster
-		klog.Infof("Updated cluster: %s", cluster.Name)
+		logger.Logger.Info("Updated cluster", zap.String("clusterName", cluster.Name))
 	} else {
 		// Add new cluster
 		cm.clusters[cluster.Name] = cluster
-		klog.Infof("Added cluster: %s", cluster.Name)
+		logger.Logger.Info("Added cluster", zap.String("clusterName", cluster.Name))
 	}
 }
 
@@ -511,9 +508,9 @@ func (cm *ClusterManager) RemoveCluster(name string) {
 	// Check if the cluster exists before removing
 	if _, exists := cm.clusters[name]; exists {
 		delete(cm.clusters, name)
-		klog.Infof("Removed cluster: %s", name)
+		logger.Logger.Info("Removed cluster", zap.String("clusterName", name))
 	} else {
-		klog.V(5).Infof("Attempted to remove non-existent cluster: %s", name)
+		logger.Logger.Debug("Attempted to remove non-existent cluster", zap.String("clusterName", name))
 	}
 }
 
@@ -618,7 +615,7 @@ func (cm *ClusterManager) ClusterSetup(cluster *cluster.Cluster) error {
 		return fmt.Errorf("failed to load RBAC configuration: %w", err)
 	}
 
-	klog.V(5).Infof("Cluster setup complete for cluster: %s", cluster.Name)
+	logger.Logger.Debug("Cluster setup complete", zap.String("clusterName", cluster.Name))
 	return nil
 }
 
@@ -647,11 +644,11 @@ func (cm *ClusterManager) StartSecretController(ctx context.Context, namespace, 
 	// Start the controller in a goroutine
 	go func() {
 		if err := controller.Run(ctx, threadiness); err != nil {
-			klog.Errorf("Secret controller failed: %v", err)
+			logger.Logger.Error("Secret controller failed", zap.Error(err))
 		}
 	}()
 
-	klog.V(4).Infof("Started secret controller for secret %s/%s", namespace, secretName)
+	logger.Logger.Debug("Started secret controller", zap.String("namespace", namespace), zap.String("secretName", secretName))
 	return nil
 }
 
@@ -661,6 +658,6 @@ func (cm *ClusterManager) StopSecretController() {
 	if cm.secretController != nil {
 		// The controller will stop when its context is cancelled
 		// The queue shutdown is handled in the Run method
-		klog.V(4).Info("Secret controller will stop when context is cancelled")
+		logger.Logger.Debug("Secret controller will stop when context is cancelled")
 	}
 }

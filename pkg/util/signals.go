@@ -6,7 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"k8s.io/klog/v2"
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
+	"go.uber.org/zap"
 )
 
 func SignalHandler() chan struct{} {
@@ -20,11 +21,11 @@ func SignalHandler() chan struct{} {
 		close(stopCh)
 
 		for i := 0; i < 3; i++ {
-			klog.V(0).Infof("received signal %s, shutting down gracefully...", sig)
+			logger.Logger.Info("received signal, shutting down gracefully", zap.String("signal", sig.String()))
 			sig = <-ch
 		}
 
-		klog.V(0).Infof("received signal %s, force closing", sig)
+		logger.Logger.Info("received signal, force closing", zap.String("signal", sig.String()))
 
 		os.Exit(1)
 	}()

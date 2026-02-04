@@ -5,12 +5,13 @@ import (
 
 	"github.com/Improwised/kube-oidc-proxy/constants"
 	"github.com/Improwised/kube-oidc-proxy/pkg/cluster"
+	"github.com/Improwised/kube-oidc-proxy/pkg/logger"
 	"github.com/Improwised/kube-oidc-proxy/pkg/util"
+	"go.uber.org/zap"
 	v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2"
 	rbacvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
@@ -189,7 +190,7 @@ func determineRoleRefKindAndAPIGroup(roleRef string, ctrl *CAPIRbacWatcher, name
 func (ctrl *CAPIRbacWatcher) ProcessCAPIRole(capiRole *CAPIRole) {
 	targetClusters := determineTargetClusters(capiRole.Spec.CommonRoleSpec.TargetClusters, ctrl.clusters)
 	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
-		klog.Warning("skipping role ", capiRole.Name, " because it doesn't contain target clusters")
+		logger.Logger.Warn("Skipping role because it doesn't contain target clusters", zap.String("name", capiRole.Name))
 		return
 	}
 
@@ -205,7 +206,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIRole(capiRole *CAPIRole) {
 func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRole(capiClusterRole *CAPIClusterRole) {
 	targetClusters := determineTargetClusters(capiClusterRole.Spec.CommonRoleSpec.TargetClusters, ctrl.clusters)
 	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
-		klog.Warning("skipping cluster role ", capiClusterRole.Name, " because it doesn't contain target clusters")
+		logger.Logger.Warn("Skipping cluster role because it doesn't contain target clusters", zap.String("name", capiClusterRole.Name))
 		return
 	}
 
@@ -220,7 +221,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRole(capiClusterRole *CAPICluster
 func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRoleBinding(capiClusterRoleBinding *CAPIClusterRoleBinding) {
 	targetClusters := determineTargetClusters(capiClusterRoleBinding.Spec.CommonBindingSpec.TargetClusters, ctrl.clusters)
 	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
-		klog.Warning("skipping cluster role binding ", capiClusterRoleBinding.Name, " because it doesn't contain target clusters")
+		logger.Logger.Warn("Skipping cluster role binding because it doesn't contain target clusters", zap.String("name", capiClusterRoleBinding.Name))
 		return
 	}
 
@@ -236,7 +237,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRoleBinding(capiClusterRoleBindin
 func (ctrl *CAPIRbacWatcher) ProcessCAPIRoleBinding(capiRoleBinding *CAPIRoleBinding) {
 	targetClusters := determineTargetClusters(capiRoleBinding.Spec.CommonBindingSpec.TargetClusters, ctrl.clusters)
 	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
-		klog.Warning("skipping role binding ", capiRoleBinding.Name, " because it doesn't contain target clusters")
+		logger.Logger.Warn("Skipping role binding because it doesn't contain target clusters", zap.String("name", capiRoleBinding.Name))
 		return
 	}
 
@@ -330,7 +331,7 @@ func (ctrl *CAPIRbacWatcher) ProcessExistingRBACObjects() {
 	for _, obj := range existingCAPIRoles {
 		role, err := ConvertUnstructured[CAPIRole](obj)
 		if err != nil {
-			klog.Errorf("Failed to convert CAPIRole: %v", err)
+			logger.Logger.Error("Failed to convert CAPIRole", zap.Error(err))
 			continue
 		}
 		ctrl.ProcessCAPIRole(role)
@@ -341,7 +342,7 @@ func (ctrl *CAPIRbacWatcher) ProcessExistingRBACObjects() {
 	for _, obj := range existingCAPIRoleBindings {
 		roleBinding, err := ConvertUnstructured[CAPIRoleBinding](obj)
 		if err != nil {
-			klog.Errorf("Failed to convert CAPIRoleBinding: %v", err)
+			logger.Logger.Error("Failed to convert CAPIRoleBinding", zap.Error(err))
 			continue
 		}
 		ctrl.ProcessCAPIRoleBinding(roleBinding)
@@ -352,7 +353,7 @@ func (ctrl *CAPIRbacWatcher) ProcessExistingRBACObjects() {
 	for _, obj := range existingCAPIClusterRoles {
 		clusterRole, err := ConvertUnstructured[CAPIClusterRole](obj)
 		if err != nil {
-			klog.Errorf("Failed to convert CAPIClusterRole: %v", err)
+			logger.Logger.Error("Failed to convert CAPIClusterRole", zap.Error(err))
 			continue
 		}
 		ctrl.ProcessCAPIClusterRole(clusterRole)
@@ -363,7 +364,7 @@ func (ctrl *CAPIRbacWatcher) ProcessExistingRBACObjects() {
 	for _, obj := range existingCAPIClusterRoleBindings {
 		clusterRoleBinding, err := ConvertUnstructured[CAPIClusterRoleBinding](obj)
 		if err != nil {
-			klog.Errorf("Failed to convert CAPIClusterRoleBinding: %v", err)
+			logger.Logger.Error("Failed to convert CAPIClusterRoleBinding", zap.Error(err))
 			continue
 		}
 		ctrl.ProcessCAPIClusterRoleBinding(clusterRoleBinding)
@@ -383,7 +384,7 @@ func (ctrl *CAPIRbacWatcher) RebuildAllAuthorizers() {
 			c.RBACConfig.ClusterRoles,
 			c.RBACConfig.ClusterRoleBindings,
 		)
-		klog.V(5).Infof("Rebuilding authorizer for cluster: %s", c.Name)
+		logger.Logger.Debug("Rebuilding authorizer for cluster", zap.String("cluster", c.Name))
 		c.Authorizer = util.NewAuthorizer(staticRoles)
 	}
 }
@@ -462,8 +463,10 @@ func (ctrl *CAPIRbacWatcher) reevaluateRoleBindingsForClusterRole(cluster *clust
 				// Update the RoleRef to point to ClusterRole
 				cluster.RBACConfig.RoleBindings[i].RoleRef.Kind = "ClusterRole"
 				cluster.RBACConfig.RoleBindings[i].RoleRef.APIGroup = v1.GroupName
-				klog.V(5).Infof("Updated RoleBinding %s/%s to reference ClusterRole %s",
-					rb.Namespace, rb.Name, clusterRoleName)
+				logger.Logger.Debug("Updated RoleBinding to reference ClusterRole",
+					zap.String("namespace", rb.Namespace),
+					zap.String("name", rb.Name),
+					zap.String("cluster_role", clusterRoleName))
 			}
 
 		}

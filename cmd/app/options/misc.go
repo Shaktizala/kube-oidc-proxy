@@ -13,6 +13,7 @@ import (
 )
 
 type MiscOptions struct {
+	LogLevel     string
 	gitMajor     string // major version, always numeric
 	gitMinor     string // minor version, numeric possibly followed by "+"
 	gitVersion   string
@@ -47,6 +48,7 @@ func NewMiscOptions(nfs *cliflag.NamedFlagSets) *MiscOptions {
 
 func (m *MiscOptions) AddFlags(fs *pflag.FlagSet) *MiscOptions {
 	globalflag.AddGlobalFlags(fs, AppName)
+	fs.StringVar(&m.LogLevel, "log-level", "info", "Log level (debug, info, warn, error, fatal)")
 	fs.Bool("version", false, "Print version information and quit")
 	return m
 }
