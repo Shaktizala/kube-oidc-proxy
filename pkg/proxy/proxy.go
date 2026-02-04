@@ -88,9 +88,7 @@ func (caFromFile CAFromFile) CurrentCABundleContent() []byte {
 	}
 	res, err := os.ReadFile(caFromFile.CAFile)
 	if err != nil {
-		logger.Logger.Error("unable to read CA file",
-			zap.String("path", caFromFile.CAFile),
-			zap.Error(err))
+		logger.Logger.Error("unable to read CA file", zap.String("path", caFromFile.CAFile), zap.Error(err))
 		return nil
 	}
 	return res
@@ -225,20 +223,16 @@ func (p *Proxy) reviewToken(rw http.ResponseWriter, req *http.Request) bool {
 	req.URL.Path = strings.TrimPrefix(req.URL.Path, "/"+clusterName)
 	config := p.clusterManager.GetCluster(clusterName)
 
-	logger.Logger.Debug("attempting to validate a token in request using TokenReview endpoint",
-		zap.String("remoteAddr", remoteAddr))
+	logger.Logger.Debug("attempting to validate a token in request using TokenReview endpoint", zap.String("remoteAddr", remoteAddr))
 
 	ok, err := config.TokenReviewer.Review(req)
 	if err != nil {
-		logger.Logger.Error("unable to authenticate the request via TokenReview due to an error",
-			zap.String("remoteAddr", remoteAddr),
-			zap.Error(err))
+		logger.Logger.Error("unable to authenticate the request via TokenReview due to an error", zap.String("remoteAddr", remoteAddr), zap.Error(err))
 		return false
 	}
 
 	if !ok {
-		logger.Logger.Debug("passing request with valid token through",
-			zap.String("remoteAddr", remoteAddr))
+		logger.Logger.Debug("passing request with valid token through", zap.String("remoteAddr", remoteAddr))
 
 		return false
 	}

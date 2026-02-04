@@ -201,8 +201,6 @@ func (a *Audit) SendAuditLog(log Log) {
 		return
 	}
 	if r.IsError() || r.StatusCode() != http.StatusOK {
-		logger.Logger.Error("Error sending audit log to webhook",
-			zap.String("response", r.String()),
-			zap.Int("status_code", r.StatusCode()))
+		logger.Logger.Error("Error sending audit log to webhook", zap.String("response", r.String()), zap.Int("status_code", r.StatusCode()))
 	}
 }

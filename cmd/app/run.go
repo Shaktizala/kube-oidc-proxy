@@ -223,8 +223,7 @@ func LoadClusterConfig(path string) ([]*cluster.Cluster, error) {
 			continue
 		}
 		if _, exists := clusterNames[clusterConfig.Name]; exists {
-			logger.Logger.Warn("duplicate cluster name, skipping this cluster",
-				zap.String("name", clusterConfig.Name))
+			logger.Logger.Warn("duplicate cluster name, skipping this cluster", zap.String("name", clusterConfig.Name))
 			continue
 		}
 
@@ -298,18 +297,14 @@ func initStaticClusters(clusterConfigs []*cluster.Cluster, clusterManager *clust
 			// Create REST config for the cluster
 			restConfig, err := clientOptions.ToRESTConfig()
 			if err != nil {
-				logger.Logger.Warn("failed to create REST config for cluster",
-					zap.String("cluster", c.Name),
-					zap.Error(err))
+				logger.Logger.Warn("failed to create REST config for cluster", zap.String("cluster", c.Name), zap.Error(err))
 				return
 			}
 			c.RestConfig = restConfig
 
 			// Set up the cluster in the manager
 			if err := clusterManager.ClusterSetup(c); err != nil {
-				logger.Logger.Warn("failed to setup cluster",
-					zap.String("cluster", c.Name),
-					zap.Error(err))
+				logger.Logger.Warn("failed to setup cluster", zap.String("cluster", c.Name), zap.Error(err))
 				return
 			}
 			c.IsStatic = true // Mark as statically configured

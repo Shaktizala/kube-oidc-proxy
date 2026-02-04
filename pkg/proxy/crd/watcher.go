@@ -110,8 +110,7 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		DeleteFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
-				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIRole",
-					zap.String("got", fmt.Sprintf("%T", obj)))
+				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIRole", zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			capiRole, err := ConvertUnstructured[CAPIRole](u)
@@ -161,8 +160,7 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		DeleteFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
-				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIClusterRole",
-					zap.String("got", fmt.Sprintf("%T", obj)))
+				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIClusterRole", zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			capiClusterRole, err := ConvertUnstructured[CAPIClusterRole](u)
@@ -212,8 +210,7 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		DeleteFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
-				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIRoleBinding",
-					zap.String("got", fmt.Sprintf("%T", obj)))
+				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIRoleBinding", zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			capiRoleBinding, err := ConvertUnstructured[CAPIRoleBinding](u)
@@ -263,8 +260,7 @@ func (w *CAPIRbacWatcher) RegisterEventHandlers() {
 		DeleteFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
-				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIClusterRoleBinding",
-					zap.String("got", fmt.Sprintf("%T", obj)))
+				logger.Logger.Error("Unexpected type in DeleteFunc for CAPIClusterRoleBinding", zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			capiClusterRoleBinding, err := ConvertUnstructured[CAPIClusterRoleBinding](u)

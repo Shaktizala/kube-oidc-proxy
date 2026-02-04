@@ -207,8 +207,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIRole(capiRole *CAPIRole) {
 func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRole(capiClusterRole *CAPIClusterRole) {
 	targetClusters := determineTargetClusters(capiClusterRole.Spec.CommonRoleSpec.TargetClusters, ctrl.clusters)
 	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
-		logger.Logger.Warn("Skipping cluster role because it doesn't contain target clusters",
-			zap.String("name", capiClusterRole.Name))
+		logger.Logger.Warn("Skipping cluster role because it doesn't contain target clusters", zap.String("name", capiClusterRole.Name))
 		return
 	}
 
@@ -223,8 +222,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRole(capiClusterRole *CAPICluster
 func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRoleBinding(capiClusterRoleBinding *CAPIClusterRoleBinding) {
 	targetClusters := determineTargetClusters(capiClusterRoleBinding.Spec.CommonBindingSpec.TargetClusters, ctrl.clusters)
 	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
-		logger.Logger.Warn("Skipping cluster role binding because it doesn't contain target clusters",
-			zap.String("name", capiClusterRoleBinding.Name))
+		logger.Logger.Warn("Skipping cluster role binding because it doesn't contain target clusters", zap.String("name", capiClusterRoleBinding.Name))
 		return
 	}
 
@@ -240,8 +238,7 @@ func (ctrl *CAPIRbacWatcher) ProcessCAPIClusterRoleBinding(capiClusterRoleBindin
 func (ctrl *CAPIRbacWatcher) ProcessCAPIRoleBinding(capiRoleBinding *CAPIRoleBinding) {
 	targetClusters := determineTargetClusters(capiRoleBinding.Spec.CommonBindingSpec.TargetClusters, ctrl.clusters)
 	if len(targetClusters) < 1 && len(ctrl.clusters) > 0 {
-		logger.Logger.Warn("Skipping role binding because it doesn't contain target clusters",
-			zap.String("name", capiRoleBinding.Name))
+		logger.Logger.Warn("Skipping role binding because it doesn't contain target clusters", zap.String("name", capiRoleBinding.Name))
 		return
 	}
 
@@ -388,8 +385,7 @@ func (ctrl *CAPIRbacWatcher) RebuildAllAuthorizers() {
 			c.RBACConfig.ClusterRoles,
 			c.RBACConfig.ClusterRoleBindings,
 		)
-		logger.Logger.Debug("Rebuilding authorizer for cluster",
-			zap.String("cluster", c.Name))
+		logger.Logger.Debug("Rebuilding authorizer for cluster", zap.String("cluster", c.Name))
 		c.Authorizer = util.NewAuthorizer(staticRoles)
 	}
 }

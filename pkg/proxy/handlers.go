@@ -57,7 +57,7 @@ func (p *Proxy) WithRBACHandler(handler http.Handler) http.Handler {
 		}
 
 		// skip validation in Excluded resourse
-		// Group: "authentication.k8s.io", Resource: "selfsubjectreviews",
+		// Group: "\authentication.k8s.io", Resource: "selfsubjectreviews",
 		// Group: "authentication.k8s.io", Resource: "tokenreviews",
 		// Group: "authorization.k8s.io", Resource: "localsubjectaccessreviews",
 		// Group: "authorization.k8s.io", Resource: "selfsubjectaccessreviews",
@@ -318,9 +318,7 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 
 			// No impersonation configuration found in context
 		case cluster.ErrNoImpersonationConfig:
-			logger.Logger.Error("if you are seeing this, there is likely a bug in the proxy",
-				zap.String("remoteAddr", r.RemoteAddr),
-				zap.Error(err))
+			logger.Logger.Error("if you are seeing this, there is likely a bug in the proxy", zap.String("remoteAddr", r.RemoteAddr), zap.Error(err))
 			http.Error(rw, "", http.StatusInternalServerError)
 			return
 
@@ -333,14 +331,10 @@ func (p *Proxy) newErrorHandler() func(rw http.ResponseWriter, r *http.Request, 
 		default:
 
 			if strings.Contains(err.Error(), "not allowed to impersonate") {
-				logger.Logger.Debug("impersonation not allowed",
-					zap.String("remoteAddr", r.RemoteAddr),
-					zap.Error(err))
+				logger.Logger.Debug("impersonation not allowed", zap.String("remoteAddr", r.RemoteAddr), zap.Error(err))
 				http.Error(rw, err.Error(), http.StatusForbidden)
 			} else {
-				logger.Logger.Error("unknown error",
-					zap.String("remoteAddr", r.RemoteAddr),
-					zap.Error(err))
+				logger.Logger.Error("unknown error", zap.String("remoteAddr", r.RemoteAddr), zap.Error(err))
 				http.Error(rw, err.Error(), http.StatusInternalServerError)
 			}
 

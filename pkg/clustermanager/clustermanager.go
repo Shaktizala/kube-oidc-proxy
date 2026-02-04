@@ -167,9 +167,7 @@ func NewSecretController(clusterManager *ClusterManager, namespace, secretName s
 		AddFunc: func(obj interface{}) {
 			secret, ok := obj.(*corev1.Secret)
 			if !ok {
-				logger.Logger.Error("Unexpected object type in AddFunc",
-					zap.String("expected", "Secret"),
-					zap.String("got", fmt.Sprintf("%T", obj)))
+				logger.Logger.Error("Unexpected object type in AddFunc", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", obj)))
 				return
 			}
 			// Only process the specific secret we're interested in
@@ -180,16 +178,12 @@ func NewSecretController(clusterManager *ClusterManager, namespace, secretName s
 		UpdateFunc: func(old interface{}, new interface{}) {
 			newSecret, ok := new.(*corev1.Secret)
 			if !ok {
-				logger.Logger.Error("Unexpected object type in UpdateFunc (new)",
-					zap.String("expected", "Secret"),
-					zap.String("got", fmt.Sprintf("%T", new)))
+				logger.Logger.Error("Unexpected object type in UpdateFunc (new)", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", new)))
 				return
 			}
 			oldSecret, ok := old.(*corev1.Secret)
 			if !ok {
-				logger.Logger.Error("Unexpected object type in UpdateFunc (old)",
-					zap.String("expected", "Secret"),
-					zap.String("got", fmt.Sprintf("%T", old)))
+				logger.Logger.Error("Unexpected object type in UpdateFunc (old)", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", old)))
 				return
 			}
 
@@ -207,15 +201,11 @@ func NewSecretController(clusterManager *ClusterManager, namespace, secretName s
 				if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
 					secret, ok = tombstone.Obj.(*corev1.Secret)
 					if !ok {
-						logger.Logger.Error("Unexpected object type in DeleteFunc tombstone",
-							zap.String("expected", "Secret"),
-							zap.String("got", fmt.Sprintf("%T", tombstone.Obj)))
+						logger.Logger.Error("Unexpected object type in DeleteFunc tombstone", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", tombstone.Obj)))
 						return
 					}
 				} else {
-					logger.Logger.Error("Unexpected object type in DeleteFunc",
-						zap.String("expected", "Secret"),
-						zap.String("got", fmt.Sprintf("%T", obj)))
+					logger.Logger.Error("Unexpected object type in DeleteFunc", zap.String("expected", "Secret"), zap.String("got", fmt.Sprintf("%T", obj)))
 					return
 				}
 			}
@@ -351,9 +341,7 @@ func (sc *SecretController) syncHandler(ctx context.Context, key interface{}) er
 
 	// Verify secret name matches our target
 	if secret.Name != sc.secretName {
-		logger.Logger.Debug("Ignoring secret that doesn't match target name",
-			zap.String("secretName", secret.Name),
-			zap.String("targetName", sc.secretName))
+		logger.Logger.Debug("Ignoring secret that doesn't match target name", zap.String("secretName", secret.Name), zap.String("targetName", sc.secretName))
 		return nil
 	}
 
@@ -373,8 +361,7 @@ func (sc *SecretController) handleSecretDeletion(key string) {
 	existingClusters := sc.clusterManager.GetAllClusters()
 	for _, cluster := range existingClusters {
 		if !cluster.IsStatic {
-			logger.Logger.Debug("Removing dynamic cluster due to secret deletion",
-				zap.String("clusterName", cluster.Name))
+			logger.Logger.Debug("Removing dynamic cluster due to secret deletion", zap.String("clusterName", cluster.Name))
 			sc.clusterManager.RemoveCluster(cluster.Name)
 		}
 	}
@@ -407,8 +394,7 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 	existingClusters := cm.GetAllClusters()
 	for _, cluster := range existingClusters {
 		if _, exists := currentClusters[cluster.Name]; !exists && !cluster.IsStatic {
-			logger.Logger.Debug("Removing dynamic cluster as it's no longer in the secret",
-				zap.String("clusterName", cluster.Name))
+			logger.Logger.Debug("Removing dynamic cluster as it's no longer in the secret", zap.String("clusterName", cluster.Name))
 			cm.RemoveCluster(cluster.Name)
 		}
 	}
@@ -426,9 +412,7 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 			// Parse the kubeconfig data to create a REST config
 			restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigData)
 			if err != nil {
-				logger.Logger.Error("Failed to create REST config for cluster",
-					zap.String("clusterName", clusterName),
-					zap.Error(err))
+				logger.Logger.Error("Failed to create REST config for cluster", zap.String("clusterName", clusterName), zap.Error(err))
 				return
 			}
 
@@ -441,26 +425,21 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 
 			// Set up the cluster with necessary components
 			if err = cm.ClusterSetup(newCluster); err != nil {
-				logger.Logger.Error("Failed to set up cluster",
-					zap.String("clusterName", clusterName),
-					zap.Error(err))
+				logger.Logger.Error("Failed to set up cluster", zap.String("clusterName", clusterName), zap.Error(err))
 				return
 			}
 
 			// Run additional setup if a setup function is provided
 			if cm.SetupFunc != nil {
 				if err := cm.SetupFunc(newCluster); err != nil {
-					logger.Logger.Error("Additional setup failed for cluster",
-						zap.String("clusterName", clusterName),
-						zap.Error(err))
+					logger.Logger.Error("Additional setup failed for cluster", zap.String("clusterName", clusterName), zap.Error(err))
 					return
 				}
 			}
 
 			// Add or update the cluster in the manager
 			cm.AddOrUpdateCluster(newCluster)
-			logger.Logger.Debug("Successfully added/updated dynamic cluster",
-				zap.String("clusterName", clusterName))
+			logger.Logger.Debug("Successfully added/updated dynamic cluster", zap.String("clusterName", clusterName))
 
 			// Update CAPI RBAC watcher if available
 			if cm.capiRbacWatcher != nil {
@@ -484,8 +463,7 @@ func (cm *ClusterManager) updateDynamicClusters(secret *corev1.Secret) error {
 func (cm *ClusterManager) removeDynamicClusters(secret *corev1.Secret) {
 	// Remove each cluster specified in the secret
 	for clusterName := range secret.Data {
-		logger.Logger.Debug("Removing cluster due to secret deletion",
-			zap.String("clusterName", clusterName))
+		logger.Logger.Debug("Removing cluster due to secret deletion", zap.String("clusterName", clusterName))
 		cm.RemoveCluster(clusterName)
 	}
 
@@ -670,9 +648,7 @@ func (cm *ClusterManager) StartSecretController(ctx context.Context, namespace, 
 		}
 	}()
 
-	logger.Logger.Debug("Started secret controller",
-		zap.String("namespace", namespace),
-		zap.String("secretName", secretName))
+	logger.Logger.Debug("Started secret controller", zap.String("namespace", namespace), zap.String("secretName", secretName))
 	return nil
 }
 
